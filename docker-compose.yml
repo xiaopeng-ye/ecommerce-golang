@@ -1,32 +1,72 @@
-version: "3"
+version: "3.8"
 services:
   db:
     image: mysql:8.0
+    container_name: ecommerce-db
     healthcheck:
-      test: "exit 0"
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+      interval: 10s
+      start_period: 30s
     volumes:
-      - ./db_data:/var/lib/mysql
+      - db_data:/var/lib/mysql
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: mypassword
       MYSQL_DATABASE: ecom
+    networks:
+      - ecommerce-network
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: on-failure
-    volumes:
-      - .:/go/src/api
+      target: build-release-stage
+      args:
+        VERSION: ${VERSION:-dev}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    container_name: ecommerce-api
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
+      # Application Configuration
+      ENVIRONMENT: development
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+
+      # Server Configuration
+      PUBLIC_HOST: http://localhost
+      PORT: 8080
+
+      # Database Configuration
       DB_HOST: db
+      DB_PORT: 3306
       DB_USER: root
       DB_PASSWORD: mypassword
       DB_NAME: ecom
-    links:
-      - db
+
+      # JWT Configuration
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRATION_IN_SECONDS: 604800
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  ecommerce-network:
+    driver: bridge
+
+volumes:
+  db_data:
