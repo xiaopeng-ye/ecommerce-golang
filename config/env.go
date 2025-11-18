@@ -64,12 +64,25 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-// getEnvRequired gets a required environment variable or panics
+// getEnvRequired gets a required environment variable or uses test default
 func getEnvRequired(key string) string {
 	if value, ok := os.LookupEnv(key); ok && value != "" {
 		return value
 	}
-	log.Fatalf("Required environment variable %s is not set", key)
+
+	// In test/development environment, provide safe defaults
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" || env == "development" || env == "test" {
+		log.Printf("Warning: Required environment variable %s is not set, using test default", key)
+		switch key {
+		case "DB_PASSWORD":
+			return "test-password"
+		case "JWT_SECRET":
+			return "test-secret-key-for-testing-only-do-not-use-in-production"
+		}
+	}
+
+	log.Fatalf("Required environment variable %s is not set in production", key)
 	return ""
 }
 

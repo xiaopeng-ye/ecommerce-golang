@@ -86,10 +86,22 @@ func (s *APIServer) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // readinessCheckHandler returns 200 if the service is ready to accept traffic
 func (s *APIServer) readinessCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check if database connection exists
+	if s.db == nil {
+		utils.Error("Database connection is nil during readiness check")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "not ready",
+			"reason": "database connection not initialized",
+		})
+		return
+	}
+
 	// Check database connection
 	if err := s.db.Ping(); err != nil {
 		utils.WithField("error", err.Error()).Error("Database ping failed during readiness check")
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(map[string]string{
 			"status": "not ready",
@@ -98,7 +110,6 @@ func (s *APIServer) readinessCheckHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "ready",
